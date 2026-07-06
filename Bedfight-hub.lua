@@ -1,71 +1,76 @@
--- Bedfight Hub Script (LocalScript) - Updated with Block Reach & Robust Detection
--- Place in StarterGui or run with your executor.
+-- Bedfight Hub v2 – by request
+-- Features: Block Reach, Kill Aura (Silent), Projectile Aimbot, Iron Stealer, Remote Scanner
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local Player = Players.LocalPlayer
+local Mouse = Player:GetMouse()
+local Camera = workspace.CurrentCamera
 
-local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
-
--- ========== GUI Setup ==========
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "BedfightHub"
+-- // GUI Setup
+local ScreenGui = Instance.new("ScreenGui", Player.PlayerGui)
+ScreenGui.Name = "BedfightHubV2"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "Main"
-MainFrame.Size = UDim2.new(0, 240, 0, 340)
-MainFrame.Position = UDim2.new(0.5, -120, 0.5, -170)
-MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-MainFrame.BorderSizePixel = 0
-MainFrame.Active = true
-MainFrame.Draggable = true
-MainFrame.Parent = ScreenGui
+local Main = Instance.new("Frame", ScreenGui)
+Main.Size = UDim2.new(0, 250, 0, 360)
+Main.Position = UDim2.new(0.5, -125, 0.5, -180)
+Main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Draggable = true
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 8)
 
-local UICorner = Instance.new("UICorner", MainFrame)
-UICorner.CornerRadius = UDim.new(0, 8)
-
-local Title = Instance.new("TextLabel")
-Title.Name = "Title"
-Title.Size = UDim2.new(1, 0, 0, 30)
+-- Title bar
+local Title = Instance.new("TextLabel", Main)
+Title.Size = UDim2.new(1, 0, 0, 35)
 Title.BackgroundTransparency = 1
 Title.Text = "Bedfight Hub"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
-Title.TextSize = 18
-Title.Parent = MainFrame
+Title.TextSize = 20
 
--- Helper to create toggles
-local function createToggle(parent, name, yPos, callback)
-    local Toggle = Instance.new("Frame")
-    Toggle.Size = UDim2.new(1, -20, 0, 30)
-    Toggle.Position = UDim2.new(0, 10, 0, yPos)
-    Toggle.BackgroundTransparency = 1
-    Toggle.Parent = parent
+-- Close button
+local Close = Instance.new("TextButton", Main)
+Close.Size = UDim2.new(0, 25, 0, 25)
+Close.Position = UDim2.new(1, -30, 0, 5)
+Close.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+Close.Text = "✕"
+Close.TextColor3 = Color3.fromRGB(255, 255, 255)
+Close.Font = Enum.Font.GothamBold
+Close.TextSize = 14
+Close.AutoButtonColor = false
+Instance.new("UICorner", Close).CornerRadius = UDim.new(0, 6)
+Close.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
 
-    local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(0, 140, 1, 0)
+-- Helper: toggle creation
+local function createToggle(y, name, callback)
+    local Frame = Instance.new("Frame", Main)
+    Frame.Size = UDim2.new(1, -20, 0, 32)
+    Frame.Position = UDim2.new(0, 10, 0, y)
+    Frame.BackgroundTransparency = 1
+
+    local Label = Instance.new("TextLabel", Frame)
+    Label.Size = UDim2.new(0, 130, 1, 0)
     Label.BackgroundTransparency = 1
     Label.Text = name
     Label.TextColor3 = Color3.fromRGB(200, 200, 200)
     Label.Font = Enum.Font.Gotham
     Label.TextSize = 14
     Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.Parent = Toggle
 
-    local Button = Instance.new("TextButton")
-    Button.Size = UDim2.new(0, 40, 0, 20)
-    Button.Position = UDim2.new(1, -50, 0.5, -10)
+    local Button = Instance.new("TextButton", Frame)
+    Button.Size = UDim2.new(0, 42, 0, 22)
+    Button.Position = UDim2.new(1, -50, 0.5, -11)
     Button.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
     Button.Text = ""
     Button.BorderSizePixel = 0
     Button.AutoButtonColor = false
-    Instance.new("UICorner", Button).CornerRadius = UDim.new(0, 10)
-    Button.Parent = Toggle
+    Instance.new("UICorner", Button).CornerRadius = UDim.new(0, 11)
 
     local enabled = false
     Button.MouseButton1Click:Connect(function()
@@ -73,101 +78,115 @@ local function createToggle(parent, name, yPos, callback)
         Button.BackgroundColor3 = enabled and Color3.fromRGB(0, 170, 100) or Color3.fromRGB(80, 80, 80)
         callback(enabled)
     end)
-
-    return Toggle
+    return Frame
 end
 
--- Helper to create a slider
-local function createSlider(parent, name, yPos, min, max, default, callback)
-    local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(1, -20, 0, 20)
-    Label.Position = UDim2.new(0, 10, 0, yPos)
+-- Helper: slider creation
+local function createSlider(y, name, min, max, default, callback)
+    local Label = Instance.new("TextLabel", Main)
+    Label.Size = UDim2.new(1, -20, 0, 18)
+    Label.Position = UDim2.new(0, 10, 0, y)
     Label.BackgroundTransparency = 1
     Label.Text = name .. ": " .. default
     Label.TextColor3 = Color3.fromRGB(200, 200, 200)
     Label.Font = Enum.Font.Gotham
-    Label.TextSize = 13
+    Label.TextSize = 12
     Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.Parent = parent
 
-    local Slider = Instance.new("Frame")
-    Slider.Size = UDim2.new(1, -20, 0, 20)
-    Slider.Position = UDim2.new(0, 10, 0, yPos + 25)
-    Slider.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    Slider.BorderSizePixel = 0
-    Instance.new("UICorner", Slider).CornerRadius = UDim.new(0, 4)
-    Slider.Parent = parent
+    local SliderBg = Instance.new("Frame", Main)
+    SliderBg.Size = UDim2.new(1, -20, 0, 20)
+    SliderBg.Position = UDim2.new(0, 10, 0, y + 22)
+    SliderBg.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    SliderBg.BorderSizePixel = 0
+    Instance.new("UICorner", SliderBg).CornerRadius = UDim.new(0, 4)
 
-    local Fill = Instance.new("Frame")
+    local Fill = Instance.new("Frame", SliderBg)
     Fill.Size = UDim2.new(0, 0, 1, 0)
     Fill.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
     Fill.BorderSizePixel = 0
     Instance.new("UICorner", Fill).CornerRadius = UDim.new(0, 4)
-    Fill.Parent = Slider
 
-    local current = default
-    local function setValue(percent)
-        current = math.floor(min + percent * (max - min))
-        Fill.Size = UDim2.new(percent, 0, 1, 0)
-        Label.Text = name .. ": " .. current
-        callback(current)
+    local val = default
+    local function set(pct)
+        val = math.floor(min + (max - min) * pct)
+        Fill.Size = UDim2.new(pct, 0, 1, 0)
+        Label.Text = name .. ": " .. val
+        callback(val)
     end
 
-    Slider.InputBegan:Connect(function(input)
+    SliderBg.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local connection
-            connection = RunService.RenderStepped:Connect(function()
+            local conn = RunService.RenderStepped:Connect(function()
                 local mousePos = UserInputService:GetMouseLocation()
-                local sliderPos = Slider.AbsolutePosition.X
-                local sliderSize = Slider.AbsoluteSize.X
-                local percent = math.clamp((mousePos.X - sliderPos) / sliderSize, 0, 1)
-                setValue(percent)
+                local pos = SliderBg.AbsolutePosition.X
+                local size = SliderBg.AbsoluteSize.X
+                local pct = math.clamp((mousePos.X - pos) / size, 0, 1)
+                set(pct)
             end)
             local endConn
             endConn = UserInputService.InputEnded:Connect(function(inp)
                 if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-                    connection:Disconnect()
+                    conn:Disconnect()
                     endConn:Disconnect()
                 end
             end)
         end
     end)
-    setValue((default - min) / (max - min))
+    set((default - min) / (max - min))
+    return {Label = Label, Slider = SliderBg}
 end
 
--- ========== Feature Toggles & Sliders ==========
+-- // Features state
 local scaffoldEnabled = false
+local blockReachValue = 15
 local killAuraEnabled = false
 local projectileAimbotEnabled = false
 local stealIronEnabled = false
-local blockReachValue = 10  -- default
 
-createToggle(MainFrame, "Auto Scaffold", 45, function(state) scaffoldEnabled = state end)
+-- Create UI elements
+createToggle(45, "Auto Scaffold", function(e) scaffoldEnabled = e end)
+createSlider(85, "Block Reach", 5, 30, 15, function(v) blockReachValue = v end)
+createToggle(135, "Kill Aura (Silent)", function(e) killAuraEnabled = e end)
+createToggle(175, "Projectile Aimbot", function(e) projectileAimbotEnabled = e end)
+createToggle(215, "Steal Iron", function(e) stealIronEnabled = e end)
 
-createSlider(MainFrame, "Block Reach", 85, 5, 30, 15, function(val)
-    blockReachValue = val
+-- Remote scanner button
+local scanBtn = Instance.new("TextButton", Main)
+scanBtn.Size = UDim2.new(1, -20, 0, 30)
+scanBtn.Position = UDim2.new(0, 10, 0, 265)
+scanBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+scanBtn.Text = "🔍 Scan Remotes (open console)"
+scanBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+scanBtn.Font = Enum.Font.GothamBold
+scanBtn.TextSize = 13
+Instance.new("UICorner", scanBtn).CornerRadius = UDim.new(0, 6)
+scanBtn.MouseButton1Click:Connect(function()
+    warn("=== RemoteEvent Scan ===")
+    for _, remote in ipairs(ReplicatedStorage:GetDescendants()) do
+        if remote:IsA("RemoteEvent") then
+            warn("Remote found: " .. remote:GetFullName())
+        end
+    end
+    warn("=== End of scan ===")
+    -- Also log remotes fired (hook later)
 end)
 
-createToggle(MainFrame, "Kill Aura (Silent)", 140, function(state) killAuraEnabled = state end)
-createToggle(MainFrame, "Projectile Aimbot", 180, function(state) projectileAimbotEnabled = state end)
-createToggle(MainFrame, "Steal Everyone's Iron", 220, function(state) stealIronEnabled = state end)
-
--- ========== Core Functions ==========
-local Character, Humanoid, RootPart
-local function onCharacter(char)
-    Character = char
-    Humanoid = char:WaitForChild("Humanoid")
-    RootPart = char:WaitForChild("HumanoidRootPart")
+-- // Core logic
+local Char, Hum, Root
+local function onChar(char)
+    Char = char
+    Hum = char:WaitForChild("Humanoid")
+    Root = char:WaitForChild("HumanoidRootPart")
 end
-onCharacter(LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait())
-LocalPlayer.CharacterAdded:Connect(onCharacter)
+if Player.Character then onChar(Player.Character) end
+Player.CharacterAdded:Connect(onChar)
 
 -- Remote finder with multiple patterns
 local function findRemote(parent, patterns)
-    for _, obj in pairs(parent:GetDescendants()) do
+    for _, obj in ipairs(parent:GetDescendants()) do
         if obj:IsA("RemoteEvent") then
-            for _, pattern in ipairs(patterns) do
-                if obj.Name:lower():find(pattern:lower()) then
+            for _, pat in ipairs(patterns) do
+                if obj.Name:lower():find(pat:lower()) then
                     return obj
                 end
             end
@@ -176,47 +195,40 @@ local function findRemote(parent, patterns)
     return nil
 end
 
--- Get tool remote
-local function getToolRemote(tool, patterns)
-    if not tool then return nil end
-    for _, child in ipairs(tool:GetDescendants()) do
-        if child:IsA("RemoteEvent") then
-            for _, pattern in ipairs(patterns) do
-                if child.Name:lower():find(pattern:lower()) then
-                    return child
-                end
-            end
-        end
-    end
-    return findRemote(ReplicatedStorage, patterns)
-end
+-- Melee remote patterns
+local meleePatterns = {"sword","melee","hit","attack","slash","damage","strike"}
+-- Block place patterns
+local placePatterns = {"place","build","put","setblock","block","wool"}
+-- Projectile patterns
+local projPatterns = {"shoot","bow","fire","projectile","launch","throw"}
 
--- ========== Kill Aura (Silent Aim Melee) ==========
-local lastAttack = 0
+-- // Kill Aura (Silent)
+local lastSwing = 0
 RunService.Heartbeat:Connect(function()
-    if not killAuraEnabled or not Character or not RootPart then return end
-    if tick() - lastAttack < 0.3 then return end
+    if not killAuraEnabled or not Char or not Root or not Hum then return end
+    if tick() - lastSwing < 0.3 then return end
 
-    local nearest, nearestDist = nil, 25
-    for _, player in pairs(Players:GetPlayers()) do
-        if player == LocalPlayer then continue end
-        local enemyChar = player.Character
-        if enemyChar and enemyChar:FindFirstChild("HumanoidRootPart") and enemyChar.Humanoid.Health > 0 then
-            local dist = (RootPart.Position - enemyChar.HumanoidRootPart.Position).Magnitude
-            if dist <= 12 and dist < nearestDist then  -- melee reach
+    local nearest = nil
+    local nearestDist = 12 -- base melee reach
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == Player then continue end
+        local c = plr.Character
+        if c and c:FindFirstChild("HumanoidRootPart") and c.Humanoid.Health > 0 then
+            local dist = (Root.Position - c.HumanoidRootPart.Position).Magnitude
+            if dist <= nearestDist and dist < (nearestDist or 999) then
                 nearestDist = dist
-                nearest = enemyChar
+                nearest = c
             end
         end
     end
     if not nearest then return end
 
-    -- Equip sword
-    local tool = Character:FindFirstChildOfClass("Tool")
-    if not tool or not getToolRemote(tool, {"sword","melee","hit","attack","slash","damage"}) then
-        for _, item in ipairs(LocalPlayer.Backpack:GetChildren()) do
-            if item:IsA("Tool") and getToolRemote(item, {"sword","melee","hit","attack","slash","damage"}) then
-                Humanoid:EquipTool(item)
+    -- Equip any tool that has a melee remote
+    local tool = Char:FindFirstChildOfClass("Tool")
+    if not tool or not findRemote(tool, meleePatterns) then
+        for _, item in ipairs(Player.Backpack:GetChildren()) do
+            if item:IsA("Tool") and findRemote(item, meleePatterns) then
+                Hum:EquipTool(item)
                 tool = item
                 break
             end
@@ -224,7 +236,7 @@ RunService.Heartbeat:Connect(function()
     end
     if not tool then return end
 
-    local remote = getToolRemote(tool, {"sword","melee","hit","attack","slash","damage"})
+    local remote = findRemote(tool, meleePatterns) or findRemote(ReplicatedStorage, meleePatterns)
     if not remote then return end
 
     local targetPart = nearest.Head or nearest:FindFirstChild("Head")
@@ -232,76 +244,70 @@ RunService.Heartbeat:Connect(function()
         pcall(function() remote:FireServer(targetPart) end)
         pcall(function() remote:FireServer(nearest) end)
     end
-    lastAttack = tick()
+    lastSwing = tick()
 end)
 
--- ========== Projectile Aimbot ==========
+-- // Projectile Aimbot
 local chargeStart = 0
-local isCharging = false
-local currentBow = nil
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
+local charging = false
+local bowTool = nil
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
     if input.UserInputType == Enum.UserInputType.MouseButton1 and projectileAimbotEnabled then
-        local tool = Character and Character:FindFirstChildOfClass("Tool")
-        if tool and (tool.Name:lower():find("bow") or tool.Name:lower():find("arc")) then
-            currentBow = tool
+        local tool = Char and Char:FindFirstChildOfClass("Tool")
+        if tool and (tool.Name:lower():find("bow") or tool.Name:lower():find("arc") or findRemote(tool, projPatterns)) then
+            bowTool = tool
             chargeStart = tick()
-            isCharging = true
+            charging = true
         end
     end
 end)
 
 UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 and isCharging then
-        isCharging = false
-        if not projectileAimbotEnabled or not currentBow then return end
-
-        local chargeTime = math.min(tick() - chargeStart, 3.0)
-        local power = chargeTime / 3.0
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and charging then
+        charging = false
+        if not projectileAimbotEnabled or not bowTool then return end
+        local chargeTime = math.min(tick() - chargeStart, 3)
+        local power = chargeTime / 3
 
         local targetPos = nil
         local minDist = 50
-        for _, player in pairs(Players:GetPlayers()) do
-            if player == LocalPlayer then continue end
-            local enemyChar = player.Character
-            if enemyChar and enemyChar:FindFirstChild("Head") then
-                local headPos = enemyChar.Head.Position
-                local enemyVel = enemyChar.HumanoidRootPart and enemyChar.HumanoidRootPart.Velocity or Vector3.zero
-                local predictedPos = headPos + enemyVel * (chargeTime * 0.3)
-                local dist = (RootPart.Position - predictedPos).Magnitude
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr == Player then continue end
+            local c = plr.Character
+            if c and c:FindFirstChild("Head") then
+                local predicted = c.Head.Position + (c.HumanoidRootPart and c.HumanoidRootPart.Velocity or Vector3.zero) * 0.3
+                local dist = (Root.Position - predicted).Magnitude
                 if dist < minDist then
                     minDist = dist
-                    targetPos = predictedPos
+                    targetPos = predicted
                 end
             end
         end
         if not targetPos then return end
 
-        local remote = getToolRemote(currentBow, {"shoot","bow","fire","projectile","launch"})
+        local remote = findRemote(bowTool, projPatterns) or findRemote(ReplicatedStorage, projPatterns)
         if remote then
-            local origin = (Character.Head and Character.Head.Position) or RootPart.Position
-            local direction = (targetPos - origin).Unit
-            pcall(function() remote:FireServer(power, direction) end)
-            pcall(function() remote:FireServer(direction, power) end)
+            local dir = (targetPos - (Char.Head and Char.Head.Position or Root.Position)).Unit
+            pcall(function() remote:FireServer(power, dir) end)
+            pcall(function() remote:FireServer(dir, power) end)
             pcall(function() remote:FireServer(targetPos) end)
         end
     end
 end)
 
--- ========== Auto Scaffold ==========
+-- // Auto Scaffold
 local lastScaffold = 0
 RunService.RenderStepped:Connect(function()
-    if not scaffoldEnabled or not Character or not RootPart then return end
-    local moveDir = Humanoid.MoveDirection
-    if moveDir.Magnitude < 0.1 then return end
+    if not scaffoldEnabled or not Char or not Root or not Hum then return end
+    if Hum.MoveDirection.Magnitude < 0.1 then return end
     if tick() - lastScaffold < 0.25 then return end
 
-    local tool = Character:FindFirstChildOfClass("Tool")
+    local tool = Char:FindFirstChildOfClass("Tool")
     if not tool or not (tool.Name:lower():find("wool") or tool.Name:lower():find("block") or tool.Name:lower():find("concrete")) then
-        for _, item in ipairs(LocalPlayer.Backpack:GetChildren()) do
+        for _, item in ipairs(Player.Backpack:GetChildren()) do
             if item:IsA("Tool") and (item.Name:lower():find("wool") or item.Name:lower():find("block") or item.Name:lower():find("concrete")) then
-                Humanoid:EquipTool(item)
+                Hum:EquipTool(item)
                 tool = item
                 break
             end
@@ -309,103 +315,58 @@ RunService.RenderStepped:Connect(function()
     end
     if not tool then return end
 
-    local remote = getToolRemote(tool, {"place","build","put","setblock"})
+    local remote = findRemote(tool, placePatterns) or findRemote(ReplicatedStorage, placePatterns)
     if not remote then return end
 
-    local pos = RootPart.Position
+    local pos = Root.Position
     local blockPos = Vector3.new(math.floor(pos.X) + 0.5, math.floor(pos.Y - 3) + 0.5, math.floor(pos.Z) + 0.5)
     pcall(function() remote:FireServer(blockPos, "wool") end)
     pcall(function() remote:FireServer(blockPos) end)
     lastScaffold = tick()
 end)
 
--- ========== Block Reach (extend placement distance) ==========
--- Hook into the tool's remote and modify the placement position to allow further reach
--- We'll intercept the remote arguments when we detect a block placement click.
--- This uses Mouse.Button1Down to capture the target position, then calculate extended reach.
-local originalPlaceRemote = nil
-local blockTool = nil
-
-local function getBlockTool()
-    local tool = Character and Character:FindFirstChildOfClass("Tool")
-    if tool and (tool.Name:lower():find("wool") or tool.Name:lower():find("block") or tool.Name:lower():find("concrete")) then
-        return tool
-    end
-    for _, item in ipairs(LocalPlayer.Backpack:GetChildren()) do
-        if item:IsA("Tool") and (item.Name:lower():find("wool") or item.Name:lower():find("block") or item.Name:lower():find("concrete")) then
-            return item
-        end
-    end
-    return nil
-end
-
-local function hookBlockReach()
-    -- Continuously update the tool and remote
-    local newTool = getBlockTool()
-    if newTool ~= blockTool then
-        blockTool = newTool
-        if blockTool then
-            originalPlaceRemote = getToolRemote(blockTool, {"place","build","put","setblock"})
-        else
-            originalPlaceRemote = nil
-        end
-    end
-end
-
--- Listen for mouse clicks and if we have a block tool, override the placement distance
-local function onMouseButton1Down()
-    hookBlockReach()
-    if not blockReachValue or blockReachValue <= 10 then return end -- skip if default
-    if not blockTool or not originalPlaceRemote then return end
-
-    -- Calculate desired placement position based on mouse hit (Raycast)
-    local camera = workspace.CurrentCamera
-    local mousePos = UserInputService:GetMouseLocation()
-    local ray = camera:ViewportPointToRay(mousePos.X, mousePos.Y)
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-    raycastParams.FilterDescendantsInstances = {Character}
-    local result = workspace:Raycast(ray.Origin, ray.Direction * blockReachValue, raycastParams)
-    if result then
-        -- result.Instance is the hit part; we need to place the block on the face
-        local normal = result.Normal
-        local hitPos = result.Position
-        -- Adjust to block grid (assuming 1 stud grid)
-        local blockPos = Vector3.new(
-            math.floor(hitPos.X) + 0.5,
-            math.floor(hitPos.Y) + 0.5,
-            math.floor(hitPos.Z) + 0.5
-        )
-        -- Offset by face normal to place on correct side
-        blockPos = blockPos + normal * 0.5
-        -- Fire remote with extended position
-        pcall(function() originalPlaceRemote:FireServer(blockPos, blockTool.Name) end)
-        pcall(function() originalPlaceRemote:FireServer(blockPos) end)
-    end
-end
-
--- Hook mouse down; we need to avoid interfering with the normal placement if reach is default.
+-- // Block Reach (extended placement)
+local lastPlace = 0
 Mouse.Button1Down:Connect(function()
-    if blockReachValue > 10 then
-        onMouseButton1Down()
+    if blockReachValue <= 10 then return end -- default reach, let game handle
+    local tool = Char and Char:FindFirstChildOfClass("Tool")
+    if not tool or not (tool.Name:lower():find("wool") or tool.Name:lower():find("block") or tool.Name:lower():find("concrete")) then return end
+    if tick() - lastPlace < 0.2 then return end
+
+    local remote = findRemote(tool, placePatterns) or findRemote(ReplicatedStorage, placePatterns)
+    if not remote then return end
+
+    local mousePos = UserInputService:GetMouseLocation()
+    local ray = Camera:ViewportPointToRay(mousePos.X, mousePos.Y)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+    params.FilterDescendantsInstances = {Char}
+    local result = workspace:Raycast(ray.Origin, ray.Direction * blockReachValue, params)
+    if result then
+        local hitPos = result.Position + result.Normal * 0.5
+        local blockPos = Vector3.new(math.floor(hitPos.X) + 0.5, math.floor(hitPos.Y) + 0.5, math.floor(hitPos.Z) + 0.5)
+        pcall(function() remote:FireServer(blockPos, tool.Name) end)
+        pcall(function() remote:FireServer(blockPos) end)
+        lastPlace = tick()
     end
 end)
 
--- ========== Steal Everyone's Iron ==========
-local function getIronValue(player)
-    local leaderstats = player:FindFirstChild("leaderstats")
+-- // Iron Stealer
+local function getIronVal(plr)
+    local leaderstats = plr:FindFirstChild("leaderstats")
     if leaderstats then
-        for _, child in ipairs(leaderstats:GetChildren()) do
-            if child:IsA("IntValue") and (child.Name:lower():find("iron") or child.Name:lower():find("fe")) then
-                return child
+        for _, v in ipairs(leaderstats:GetChildren()) do
+            if v:IsA("IntValue") and (v.Name:lower():find("iron") or v.Name:lower():find("fe")) then
+                return v
             end
         end
     end
-    local resources = player:FindFirstChild("Resources")
+    -- alternative in Resources
+    local resources = plr:FindFirstChild("Resources")
     if resources then
-        for _, child in ipairs(resources:GetChildren()) do
-            if child:IsA("IntValue") and (child.Name:lower():find("iron") or child.Name:lower():find("fe")) then
-                return child
+        for _, v in ipairs(resources:GetChildren()) do
+            if v:IsA("IntValue") and (v.Name:lower():find("iron") or v.Name:lower():find("fe")) then
+                return v
             end
         end
     end
@@ -414,16 +375,15 @@ end
 
 spawn(function()
     while true do
-        if stealIronEnabled and LocalPlayer.Character then
-            local myIron = getIronValue(LocalPlayer)
+        if stealIronEnabled and Player.Character then
+            local myIron = getIronVal(Player)
             if myIron then
-                for _, player in ipairs(Players:GetPlayers()) do
-                    if player ~= LocalPlayer then
-                        local theirIron = getIronValue(player)
+                for _, plr in ipairs(Players:GetPlayers()) do
+                    if plr ~= Player then
+                        local theirIron = getIronVal(plr)
                         if theirIron and theirIron.Value > 0 then
-                            local stolen = theirIron.Value
+                            myIron.Value += theirIron.Value
                             theirIron.Value = 0
-                            myIron.Value = myIron.Value + stolen
                         end
                     end
                 end
@@ -431,19 +391,4 @@ spawn(function()
         end
         wait(0.5)
     end
-end)
-
--- Close button
-local CloseButton = Instance.new("TextButton")
-CloseButton.Size = UDim2.new(0, 20, 0, 20)
-CloseButton.Position = UDim2.new(1, -25, 0, 5)
-CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-CloseButton.Text = "X"
-CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseButton.Font = Enum.Font.GothamBold
-CloseButton.TextSize = 14
-Instance.new("UICorner", CloseButton).CornerRadius = UDim.new(0, 10)
-CloseButton.Parent = MainFrame
-CloseButton.MouseButton1Click:Connect(function()
-    ScreenGui:Destroy()
 end)
