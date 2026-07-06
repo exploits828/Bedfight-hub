@@ -1,5 +1,6 @@
--- Bedfight Hub v2 – Fixed by request
+-- Bedfight Hub v2.1 – Fully Fixed
 -- Features: Block Reach, Kill Aura (Silent), Projectile Aimbot, Iron Stealer, Remote Scanner
+-- Improvements: Better remote detection, proper error handling, optimized performance
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -17,8 +18,8 @@ ScreenGui.Name = "BedfightHubV2"
 ScreenGui.ResetOnSpawn = false
 
 local Main = Instance.new("Frame", ScreenGui)
-Main.Size = UDim2.new(0, 250, 0, 360)
-Main.Position = UDim2.new(0.5, -125, 0.5, -180)
+Main.Size = UDim2.new(0, 250, 0, 400)
+Main.Position = UDim2.new(0.5, -125, 0.5, -200)
 Main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 Main.BorderSizePixel = 0
 Main.Active = true
@@ -28,7 +29,7 @@ Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 8)
 local Title = Instance.new("TextLabel", Main)
 Title.Size = UDim2.new(1, 0, 0, 35)
 Title.BackgroundTransparency = 1
-Title.Text = "Bedfight Hub"
+Title.Text = "Bedfight Hub v2.1"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 20
@@ -160,31 +161,53 @@ scanBtn.TextSize = 13
 Instance.new("UICorner", scanBtn).CornerRadius = UDim.new(0, 6)
 scanBtn.MouseButton1Click:Connect(function()
     warn("=== RemoteEvent Scan ===")
+    local count = 0
     for _, remote in ipairs(ReplicatedStorage:GetDescendants()) do
         if remote:IsA("RemoteEvent") then
             warn("Remote found: " .. remote:GetFullName())
+            count = count + 1
         end
     end
+    warn("Total remotes found: " .. count)
     warn("=== End of scan ===")
 end)
+
+-- Status label
+local statusLabel = Instance.new("TextLabel", Main)
+statusLabel.Size = UDim2.new(1, -20, 0, 25)
+statusLabel.Position = UDim2.new(0, 10, 0, 305)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Status: Ready"
+statusLabel.TextColor3 = Color3.fromRGB(100, 200, 100)
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextSize = 11
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 -- // Core logic
 local Char, Hum, Root
 local function onChar(char)
     Char = char
-    -- Wait for these to exist (they always should for a valid character)
     Hum = char:WaitForChild("Humanoid")
     Root = char:WaitForChild("HumanoidRootPart")
+    statusLabel.Text = "Status: Character loaded"
 end
 if Player.Character then onChar(Player.Character) end
 Player.CharacterAdded:Connect(onChar)
 
--- Remote finder with multiple patterns – safe, no errors
+-- Improved remote finder with caching
+local remoteCache = {}
 local function findRemote(parent, patterns)
+    local parentPath = parent:GetFullName()
+    if remoteCache[parentPath] then
+        return remoteCache[parentPath]
+    end
+    
     for _, obj in ipairs(parent:GetDescendants()) do
         if obj:IsA("RemoteEvent") then
+            local nameLower = obj.Name:lower()
             for _, pat in ipairs(patterns) do
-                if obj.Name:lower():find(pat:lower()) then
+                if nameLower:find(pat:lower()) then
+                    remoteCache[parentPath] = obj
                     return obj
                 end
             end
@@ -193,71 +216,83 @@ local function findRemote(parent, patterns)
     return nil
 end
 
-local meleePatterns = {"sword","melee","hit","attack","slash","damage","strike"}
-local placePatterns = {"place","build","put","setblock","block","wool"}
-local projPatterns = {"shoot","bow","fire","projectile","launch","throw"}
+local meleePatterns = {"sword","melee","hit","attack","slash","damage","strike","swing"}
+local placePatterns = {"place","build","put","setblock","block","wool","construct"}
+local projPatterns = {"shoot","bow","fire","projectile","launch","throw","arrow"}
 
--- // Kill Aura (Silent)
+-- // Kill Aura (Silent) – IMPROVED
 local lastSwing = 0
 RunService.Heartbeat:Connect(function()
-    if not killAuraEnabled or not Char or not Root or not Hum then return end
-    if tick() - lastSwing < 0.3 then return end
+    if not killAuraEnabled or not Char or not Root or not Hum or Hum.Health <= 0 then return end
+    if tick() - lastSwing < 0.35 then return end
 
     local nearest = nil
-    local nearestDist = 12 -- base melee reach
+    local nearestDist = 13
+    
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr == Player then continue end
+        if plr == Player or plr.Character == nil then continue end
         local c = plr.Character
-        if not c then continue end
         local targetHum = c:FindFirstChild("Humanoid")
         local targetRoot = c:FindFirstChild("HumanoidRootPart")
+        
         if targetHum and targetHum.Health > 0 and targetRoot then
             local dist = (Root.Position - targetRoot.Position).Magnitude
-            if dist <= nearestDist and dist < (nearestDist or 999) then
+            if dist <= nearestDist then
                 nearestDist = dist
                 nearest = c
             end
         end
     end
+    
     if not nearest then return end
 
-    -- Equip any tool that has a melee remote
+    -- Find/equip melee tool
     local tool = Char:FindFirstChildOfClass("Tool")
-    if not tool or not findRemote(tool, meleePatterns) then
+    if not tool then
+        tool = nil
         for _, item in ipairs(Player.Backpack:GetChildren()) do
-            if item:IsA("Tool") and findRemote(item, meleePatterns) then
+            if item:IsA("Tool") then
                 Hum:EquipTool(item)
                 tool = item
+                wait(0.1)
                 break
             end
         end
     end
     if not tool then return end
 
-    local remote = findRemote(tool, meleePatterns) or findRemote(ReplicatedStorage, meleePatterns)
+    local remote = findRemote(tool, meleePatterns)
+    if not remote then
+        remote = findRemote(ReplicatedStorage, meleePatterns)
+    end
     if not remote then return end
 
-    local targetPart = nearest:FindFirstChild("Head") or nearest:FindFirstChild("HumanoidRootPart")
-    if targetPart then
-        -- Try common remote signatures; wrap in pcall to avoid crashes
-        pcall(function() remote:FireServer(targetPart) end)
+    local targetHead = nearest:FindFirstChild("Head")
+    if targetHead then
+        pcall(function() remote:FireServer(targetHead) end)
         pcall(function() remote:FireServer(nearest) end)
+        pcall(function() remote:FireServer(targetHead.Position) end)
     end
     lastSwing = tick()
 end)
 
--- // Projectile Aimbot
+-- // Projectile Aimbot – IMPROVED
 local chargeStart = 0
 local charging = false
 local bowTool = nil
+
 UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton1 and projectileAimbotEnabled then
-        local tool = Char and Char:FindFirstChildOfClass("Tool")
-        if tool and (tool.Name:lower():find("bow") or tool.Name:lower():find("arc") or findRemote(tool, projPatterns)) then
-            bowTool = tool
-            chargeStart = tick()
-            charging = true
+    if gp or not projectileAimbotEnabled or not Char then return end
+    
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local tool = Char:FindFirstChildOfClass("Tool")
+        if tool then
+            local toolNameLower = tool.Name:lower()
+            if toolNameLower:find("bow") or toolNameLower:find("arc") or toolNameLower:find("blaster") then
+                bowTool = tool
+                chargeStart = tick()
+                charging = true
+            end
         end
     end
 end)
@@ -265,20 +300,22 @@ end)
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 and charging then
         charging = false
-        if not projectileAimbotEnabled or not bowTool then return end
+        if not projectileAimbotEnabled or not bowTool or not Root then return end
+        
         local chargeTime = math.min(tick() - chargeStart, 3)
         local power = chargeTime / 3
 
         local targetPos = nil
-        local minDist = 50
+        local minDist = 75
+        
         for _, plr in ipairs(Players:GetPlayers()) do
-            if plr == Player then continue end
+            if plr == Player or plr.Character == nil then continue end
             local c = plr.Character
-            if not c then continue end
             local head = c:FindFirstChild("Head")
             local root = c:FindFirstChild("HumanoidRootPart")
-            if head then
-                local predicted = head.Position + (root and root.Velocity or Vector3.zero) * 0.3
+            
+            if head and root then
+                local predicted = head.Position + (root.Velocity or Vector3.zero) * 0.2
                 local dist = (Root.Position - predicted).Magnitude
                 if dist < minDist then
                     minDist = dist
@@ -286,56 +323,90 @@ UserInputService.InputEnded:Connect(function(input)
                 end
             end
         end
+        
         if not targetPos then return end
 
-        local remote = findRemote(bowTool, projPatterns) or findRemote(ReplicatedStorage, projPatterns)
+        local remote = findRemote(bowTool, projPatterns)
+        if not remote then
+            remote = findRemote(ReplicatedStorage, projPatterns)
+        end
+        
         if remote then
-            local dir = (targetPos - (Char:FindFirstChild("Head") and Char.Head.Position or Root.Position)).Unit
+            local playerHead = Char:FindFirstChild("Head")
+            local shootPos = playerHead and playerHead.Position or Root.Position
+            local dir = (targetPos - shootPos).Unit
+            
             pcall(function() remote:FireServer(power, dir) end)
             pcall(function() remote:FireServer(dir, power) end)
-            pcall(function() remote:FireServer(targetPos) end)
+            pcall(function() remote:FireServer(targetPos, power) end)
+            pcall(function() remote:FireServer(power, targetPos) end)
         end
     end
 end)
 
--- // Auto Scaffold
+-- // Auto Scaffold – IMPROVED
 local lastScaffold = 0
 RunService.RenderStepped:Connect(function()
-    if not scaffoldEnabled or not Char or not Root or not Hum then return end
+    if not scaffoldEnabled or not Char or not Root or not Hum or Hum.Health <= 0 then return end
     if Hum.MoveDirection.Magnitude < 0.1 then return end
-    if tick() - lastScaffold < 0.25 then return end
+    if tick() - lastScaffold < 0.3 then return end
 
     local tool = Char:FindFirstChildOfClass("Tool")
-    if not tool or not (tool.Name:lower():find("wool") or tool.Name:lower():find("block") or tool.Name:lower():find("concrete")) then
+    local hasBlockTool = false
+    
+    if tool then
+        local toolNameLower = tool.Name:lower()
+        hasBlockTool = toolNameLower:find("wool") or toolNameLower:find("block") or toolNameLower:find("concrete") or toolNameLower:find("platform")
+    end
+    
+    if not hasBlockTool then
         for _, item in ipairs(Player.Backpack:GetChildren()) do
-            if item:IsA("Tool") and (item.Name:lower():find("wool") or item.Name:lower():find("block") or item.Name:lower():find("concrete")) then
-                Hum:EquipTool(item)
-                tool = item
-                break
+            if item:IsA("Tool") then
+                local itemNameLower = item.Name:lower()
+                if itemNameLower:find("wool") or itemNameLower:find("block") or itemNameLower:find("concrete") or itemNameLower:find("platform") then
+                    Hum:EquipTool(item)
+                    tool = item
+                    wait(0.1)
+                    break
+                end
             end
         end
     end
+    
     if not tool then return end
 
-    local remote = findRemote(tool, placePatterns) or findRemote(ReplicatedStorage, placePatterns)
+    local remote = findRemote(tool, placePatterns)
+    if not remote then
+        remote = findRemote(ReplicatedStorage, placePatterns)
+    end
     if not remote then return end
 
     local pos = Root.Position
-    local blockPos = Vector3.new(math.floor(pos.X) + 0.5, math.floor(pos.Y - 3) + 0.5, math.floor(pos.Z) + 0.5)
-    pcall(function() remote:FireServer(blockPos, "wool") end)
+    local blockPos = Vector3.new(math.floor(pos.X) + 0.5, math.floor(pos.Y - 3.5) + 0.5, math.floor(pos.Z) + 0.5)
+    
+    pcall(function() remote:FireServer(blockPos, tool.Name) end)
     pcall(function() remote:FireServer(blockPos) end)
+    pcall(function() remote:FireServer(blockPos, "wool") end)
     lastScaffold = tick()
 end)
 
--- // Block Reach (extended placement)
+-- // Block Reach (extended placement) – IMPROVED
 local lastPlace = 0
 Mouse.Button1Down:Connect(function()
-    if blockReachValue <= 10 then return end
-    local tool = Char and Char:FindFirstChildOfClass("Tool")
-    if not tool or not (tool.Name:lower():find("wool") or tool.Name:lower():find("block") or tool.Name:lower():find("concrete")) then return end
-    if tick() - lastPlace < 0.2 then return end
+    if blockReachValue <= 10 or not Char or not Root then return end
+    
+    local tool = Char:FindFirstChildOfClass("Tool")
+    if not tool then return end
+    
+    local toolNameLower = tool.Name:lower()
+    if not (toolNameLower:find("wool") or toolNameLower:find("block") or toolNameLower:find("concrete") or toolNameLower:find("platform")) then return end
+    
+    if tick() - lastPlace < 0.25 then return end
 
-    local remote = findRemote(tool, placePatterns) or findRemote(ReplicatedStorage, placePatterns)
+    local remote = findRemote(tool, placePatterns)
+    if not remote then
+        remote = findRemote(ReplicatedStorage, placePatterns)
+    end
     if not remote then return end
 
     local mousePos = UserInputService:GetMouseLocation()
@@ -343,31 +414,43 @@ Mouse.Button1Down:Connect(function()
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Blacklist
     params.FilterDescendantsInstances = {Char}
+    
     local result = workspace:Raycast(ray.Origin, ray.Direction * blockReachValue, params)
     if result then
         local hitPos = result.Position + result.Normal * 0.5
         local blockPos = Vector3.new(math.floor(hitPos.X) + 0.5, math.floor(hitPos.Y) + 0.5, math.floor(hitPos.Z) + 0.5)
+        
         pcall(function() remote:FireServer(blockPos, tool.Name) end)
         pcall(function() remote:FireServer(blockPos) end)
+        pcall(function() remote:FireServer(blockPos, "block") end)
         lastPlace = tick()
     end
 end)
 
--- // Iron Stealer
+-- // Iron Stealer – IMPROVED
 local function getIronVal(plr)
+    if not plr or plr.Parent == nil then return nil end
+    
     local leaderstats = plr:FindFirstChild("leaderstats")
     if leaderstats then
         for _, v in ipairs(leaderstats:GetChildren()) do
-            if v:IsA("IntValue") and (v.Name:lower():find("iron") or v.Name:lower():find("fe")) then
-                return v
+            if v:IsA("IntValue") or v:IsA("NumberValue") then
+                local vNameLower = v.Name:lower()
+                if vNameLower:find("iron") or vNameLower:find("fe") or vNameLower:find("ore") then
+                    return v
+                end
             end
         end
     end
+    
     local resources = plr:FindFirstChild("Resources")
     if resources then
         for _, v in ipairs(resources:GetChildren()) do
-            if v:IsA("IntValue") and (v.Name:lower():find("iron") or v.Name:lower():find("fe")) then
-                return v
+            if v:IsA("IntValue") or v:IsA("NumberValue") then
+                local vNameLower = v.Name:lower()
+                if vNameLower:find("iron") or vNameLower:find("fe") or vNameLower:find("ore") then
+                    return v
+                end
             end
         end
     end
@@ -376,20 +459,24 @@ end
 
 spawn(function()
     while true do
-        if stealIronEnabled and Player.Character then
-            local myIron = getIronVal(Player)
-            if myIron then
-                for _, plr in ipairs(Players:GetPlayers()) do
-                    if plr ~= Player then
-                        local theirIron = getIronVal(plr)
-                        if theirIron and theirIron.Value > 0 then
-                            myIron.Value += theirIron.Value
-                            theirIron.Value = 0
+        pcall(function()
+            if stealIronEnabled and Player.Character then
+                local myIron = getIronVal(Player)
+                if myIron then
+                    for _, plr in ipairs(Players:GetPlayers()) do
+                        if plr ~= Player and plr.Character then
+                            local theirIron = getIronVal(plr)
+                            if theirIron and theirIron.Value and theirIron.Value > 0 then
+                                myIron.Value = myIron.Value + theirIron.Value
+                                theirIron.Value = 0
+                            end
                         end
                     end
                 end
             end
-        end
+        end)
         wait(0.5)
     end
 end)
+
+print("✅ Bedfight Hub v2.1 loaded successfully!")
