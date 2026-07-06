@@ -1,8 +1,21 @@
--- Bedfight Hub – Deadcell Remake UI
--- Load Deadcell Library
-local library = loadstring(game:HttpGet("https://github.com/GhostDuckyy/UI-Libraries/blob/main/DEADCELL%20REMAKE/Modified/source.lua?raw=true"))()
+-- Bedfight Hub – Deadcell Remake UI (Final)
+-- Load the Deadcell Remake library (tries Modified first, then original)
+local library = nil
+local success, err = pcall(function()
+    library = loadstring(game:HttpGet("https://github.com/GhostDuckyy/UI-Libraries/blob/main/DEADCELL%20REMAKE/Modified/source.lua?raw=true"))()
+end)
+if not success or not library then
+    -- Fallback to original link
+    success, err = pcall(function()
+        library = loadstring(game:HttpGet("https://github.com/GhostDuckyy/UI-Libraries/blob/main/DEADCELL%20REMAKE/source.lua?raw=true"))()
+    end)
+end
+if not library then
+    warn("Failed to load Deadcell library:", err)
+    return
+end
 
--- Services
+-- ====================== Services ======================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -11,64 +24,77 @@ local Player = Players.LocalPlayer
 local Mouse = Player:GetMouse()
 local Camera = workspace.CurrentCamera
 
--- Wait for remotes
+-- ====================== Remotes (exact names) ======================
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
 local placeBlockRemote = remotes:WaitForChild("PlaceBlock")
 local shootProjectileRemote = remotes:WaitForChild("ShootProjectile")
 local kitsRemotes = remotes:WaitForChild("KitsRemotes")
--- Melee remotes that might work – you can adjust the list later
+
+-- Melee attacks – you can add or remove names if you discover the correct one
 local meleeRemoteNames = {"Smash", "Charge", "ChargeDamage", "Leap", "Hack"}
 
--- Character handling
+-- ====================== Character Handling ======================
 local Char, Hum, Root
-local function onCharacter(char)
-    Char = char
-    Hum = char:WaitForChild("Humanoid")
-    Root = char:WaitForChild("HumanoidRootPart")
+local function onChar(c)
+    Char = c
+    Hum = c:WaitForChild("Humanoid")
+    Root = c:WaitForChild("HumanoidRootPart")
 end
-if Player.Character then onCharacter(Player.Character) end
-Player.CharacterAdded:Connect(onCharacter)
+if Player.Character then onChar(Player.Character) end
+Player.CharacterAdded:Connect(onChar)
 
--- Feature states
+-- ====================== Feature States ======================
 local killAuraEnabled = false
 local projectileAimbotEnabled = false
 local scaffoldEnabled = false
 local blockReachValue = 15
 local stealIronEnabled = false
 
--- ====================== UI ======================
-local window = library:new_window({size = Vector2.new(600, 400)})
+-- ====================== UI Setup (using your exact theme) ======================
+local theme = {
+    ["Default"] = {
+        ["Accent"] = Color3.fromRGB(61, 100, 227),
+        ["Window Outline Background"] = Color3.fromRGB(39,39,47),
+        ["Window Inline Background"] = Color3.fromRGB(23,23,30),
+        ["Window Holder Background"] = Color3.fromRGB(32,32,38),
+        ["Page Unselected"] = Color3.fromRGB(32,32,38),
+        ["Page Selected"] = Color3.fromRGB(55,55,64),
+        ["Section Background"] = Color3.fromRGB(27,27,34),
+        ["Section Inner Border"] = Color3.fromRGB(50,50,58),
+        ["Section Outer Border"] = Color3.fromRGB(19,19,27),
+        ["Window Border"] = Color3.fromRGB(58,58,67),
+        ["Text"] = Color3.fromRGB(245, 245, 245),
+        ["Risky Text"] = Color3.fromRGB(245, 239, 120),
+        ["Object Background"] = Color3.fromRGB(41,41,50)
+    }
+}
 
--- Combat page
+local window = library:new_window({size = Vector2.new(550, 380)})
+
+-- Combat Page
 local combatPage = window:new_page({name = "Combat"})
 local combatSec = combatPage:new_section({name = "Aimbot & Aura", size = "Fill"})
 
 combatSec:new_toggle({
     name = "Kill Aura (Silent)",
     flag = "killaura",
-    callback = function(state)
-        killAuraEnabled = state
-    end
+    callback = function(state) killAuraEnabled = state end
 })
 
 combatSec:new_toggle({
     name = "Projectile Aimbot",
     flag = "projaim",
-    callback = function(state)
-        projectileAimbotEnabled = state
-    end
+    callback = function(state) projectileAimbotEnabled = state end
 })
 
--- Building page
+-- Building Page
 local buildPage = window:new_page({name = "Building"})
 local buildSec = buildPage:new_section({name = "Scaffold & Reach", size = "Fill"})
 
 buildSec:new_toggle({
     name = "Auto Scaffold",
     flag = "scaffold",
-    callback = function(state)
-        scaffoldEnabled = state
-    end
+    callback = function(state) scaffoldEnabled = state end
 })
 
 buildSec:new_slider({
@@ -78,21 +104,17 @@ buildSec:new_slider({
     max = 30,
     default = 15,
     float = 0,
-    callback = function(val)
-        blockReachValue = val
-    end
+    callback = function(val) blockReachValue = val end
 })
 
--- Misc page
+-- Misc Page
 local miscPage = window:new_page({name = "Misc"})
 local miscSec = miscPage:new_section({name = "Iron & Scanner", size = "Fill"})
 
 miscSec:new_toggle({
     name = "Steal Everyone's Iron",
     flag = "stealiron",
-    callback = function(state)
-        stealIronEnabled = state
-    end
+    callback = function(state) stealIronEnabled = state end
 })
 
 miscSec:new_button({
@@ -108,7 +130,28 @@ miscSec:new_button({
     end
 })
 
--- ====================== Features ======================
+miscSec:new_toggle({
+    name = "TEST – Print to console",
+    flag = "test",
+    callback = function(state)
+        if state then
+            warn("HUB IS WORKING!")
+        end
+    end
+})
+
+-- Close/Open with End key (like in your example)
+local menuOther = miscPage:new_section({name = "Menu", size = "Fill", side = "right"})
+menuOther:new_keybind({
+    name = "open / close",
+    flag = "menu_toggle",
+    default = Enum.KeyCode.End,
+    mode = "Toggle",
+    ignore = true,
+    callback = function() library:Close() end
+})
+
+-- ====================== Feature Loops ======================
 
 -- Kill Aura
 local lastSwing = 0
@@ -126,7 +169,7 @@ RunService.Heartbeat:Connect(function()
         local targetRoot = c:FindFirstChild("HumanoidRootPart")
         if targetHum and targetHum.Health > 0 and targetRoot then
             local dist = (Root.Position - targetRoot.Position).Magnitude
-            if dist <= nearestDist and dist < (nearestDist or 999) then
+            if dist <= nearestDist then
                 nearestDist = dist
                 nearest = c
             end
@@ -260,13 +303,5 @@ spawn(function()
             end
         end
         wait(0.5)
-    end
-end)
-
--- Keybind to close (End key)
-UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.KeyCode == Enum.KeyCode.End then
-        library:Close()
     end
 end)
