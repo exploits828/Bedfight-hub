@@ -1,4 +1,4 @@
--- Bedfight Hub v2 – by request
+-- Bedfight Hub v2 – Fixed by request
 -- Features: Block Reach, Kill Aura (Silent), Projectile Aimbot, Iron Stealer, Remote Scanner
 
 local Players = game:GetService("Players")
@@ -25,7 +25,6 @@ Main.Active = true
 Main.Draggable = true
 Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 8)
 
--- Title bar
 local Title = Instance.new("TextLabel", Main)
 Title.Size = UDim2.new(1, 0, 0, 35)
 Title.BackgroundTransparency = 1
@@ -34,7 +33,6 @@ Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 20
 
--- Close button
 local Close = Instance.new("TextButton", Main)
 Close.Size = UDim2.new(0, 25, 0, 25)
 Close.Position = UDim2.new(1, -30, 0, 5)
@@ -168,20 +166,20 @@ scanBtn.MouseButton1Click:Connect(function()
         end
     end
     warn("=== End of scan ===")
-    -- Also log remotes fired (hook later)
 end)
 
 -- // Core logic
 local Char, Hum, Root
 local function onChar(char)
     Char = char
+    -- Wait for these to exist (they always should for a valid character)
     Hum = char:WaitForChild("Humanoid")
     Root = char:WaitForChild("HumanoidRootPart")
 end
 if Player.Character then onChar(Player.Character) end
 Player.CharacterAdded:Connect(onChar)
 
--- Remote finder with multiple patterns
+-- Remote finder with multiple patterns – safe, no errors
 local function findRemote(parent, patterns)
     for _, obj in ipairs(parent:GetDescendants()) do
         if obj:IsA("RemoteEvent") then
@@ -195,11 +193,8 @@ local function findRemote(parent, patterns)
     return nil
 end
 
--- Melee remote patterns
 local meleePatterns = {"sword","melee","hit","attack","slash","damage","strike"}
--- Block place patterns
 local placePatterns = {"place","build","put","setblock","block","wool"}
--- Projectile patterns
 local projPatterns = {"shoot","bow","fire","projectile","launch","throw"}
 
 -- // Kill Aura (Silent)
@@ -213,8 +208,11 @@ RunService.Heartbeat:Connect(function()
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr == Player then continue end
         local c = plr.Character
-        if c and c:FindFirstChild("HumanoidRootPart") and c.Humanoid.Health > 0 then
-            local dist = (Root.Position - c.HumanoidRootPart.Position).Magnitude
+        if not c then continue end
+        local targetHum = c:FindFirstChild("Humanoid")
+        local targetRoot = c:FindFirstChild("HumanoidRootPart")
+        if targetHum and targetHum.Health > 0 and targetRoot then
+            local dist = (Root.Position - targetRoot.Position).Magnitude
             if dist <= nearestDist and dist < (nearestDist or 999) then
                 nearestDist = dist
                 nearest = c
@@ -239,8 +237,9 @@ RunService.Heartbeat:Connect(function()
     local remote = findRemote(tool, meleePatterns) or findRemote(ReplicatedStorage, meleePatterns)
     if not remote then return end
 
-    local targetPart = nearest.Head or nearest:FindFirstChild("Head")
+    local targetPart = nearest:FindFirstChild("Head") or nearest:FindFirstChild("HumanoidRootPart")
     if targetPart then
+        -- Try common remote signatures; wrap in pcall to avoid crashes
         pcall(function() remote:FireServer(targetPart) end)
         pcall(function() remote:FireServer(nearest) end)
     end
@@ -275,8 +274,11 @@ UserInputService.InputEnded:Connect(function(input)
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr == Player then continue end
             local c = plr.Character
-            if c and c:FindFirstChild("Head") then
-                local predicted = c.Head.Position + (c.HumanoidRootPart and c.HumanoidRootPart.Velocity or Vector3.zero) * 0.3
+            if not c then continue end
+            local head = c:FindFirstChild("Head")
+            local root = c:FindFirstChild("HumanoidRootPart")
+            if head then
+                local predicted = head.Position + (root and root.Velocity or Vector3.zero) * 0.3
                 local dist = (Root.Position - predicted).Magnitude
                 if dist < minDist then
                     minDist = dist
@@ -288,7 +290,7 @@ UserInputService.InputEnded:Connect(function(input)
 
         local remote = findRemote(bowTool, projPatterns) or findRemote(ReplicatedStorage, projPatterns)
         if remote then
-            local dir = (targetPos - (Char.Head and Char.Head.Position or Root.Position)).Unit
+            local dir = (targetPos - (Char:FindFirstChild("Head") and Char.Head.Position or Root.Position)).Unit
             pcall(function() remote:FireServer(power, dir) end)
             pcall(function() remote:FireServer(dir, power) end)
             pcall(function() remote:FireServer(targetPos) end)
@@ -328,7 +330,7 @@ end)
 -- // Block Reach (extended placement)
 local lastPlace = 0
 Mouse.Button1Down:Connect(function()
-    if blockReachValue <= 10 then return end -- default reach, let game handle
+    if blockReachValue <= 10 then return end
     local tool = Char and Char:FindFirstChildOfClass("Tool")
     if not tool or not (tool.Name:lower():find("wool") or tool.Name:lower():find("block") or tool.Name:lower():find("concrete")) then return end
     if tick() - lastPlace < 0.2 then return end
@@ -361,7 +363,6 @@ local function getIronVal(plr)
             end
         end
     end
-    -- alternative in Resources
     local resources = plr:FindFirstChild("Resources")
     if resources then
         for _, v in ipairs(resources:GetChildren()) do
